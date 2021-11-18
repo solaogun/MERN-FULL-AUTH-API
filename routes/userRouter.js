@@ -29,6 +29,8 @@ router.patch("/update_role/:id", auth, authAdmin, userControl.updateUsersRole)
 
 router.delete("/delete/:id", auth, authAdmin, userControl.deleteUser)
 
+router.post('/google_login', userControl.googleLogin)
+
 // router.post("/register", async(req,res)=>{
 //     try{
 //         //generate password

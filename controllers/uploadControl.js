@@ -22,6 +22,8 @@ const uploadControl = {
                 if (err) throw err
 
                 removeTmp(file.tempFilePath)
+
+                console.log({ result })
                 res.json({ url: result.secure_url })
             })
 

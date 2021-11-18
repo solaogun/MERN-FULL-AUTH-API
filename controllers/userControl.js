@@ -3,6 +3,9 @@ const Users = require('../models/userModels')
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
 const sendMail = require('../controllers/sendMail')
+const { google } = require('googleapis')
+const { OAuth2 } = google.auth
+const client = new OAuth2(process.env.MAILING_SERVICE_CLIENT_ID)
 
 const { CLIENT_URL } = process.env
 
@@ -155,7 +158,7 @@ const userControl = {
     },
     getUsersAllInfor: async (req, res) => {
         try {
-            const users = await Users.findById(req.user.id).select('-password')
+            const users = await Users.find().select('-password')
             res.json(users)
 
             console.log(req.user)
@@ -203,9 +206,59 @@ const userControl = {
         } catch (err) {
             return res.status(500).json({ msg: err.message })
         }
-    }
-}
+    },
+    googleLogin: async (req, res) => {
+        try {
+            const { tokenId } = req.body
+            const verify = await client.verifyIdToken({ idToken: tokenId, audience: process.env.MAILING_SERVICE_CLIENT_ID })
+            // console.log(verify)
+            const { email_verified, email, name, picture } = verify.payload
 
+            const password = email + process.env.GOOGLE_SECRET
+
+            const passwordHash = await bcrypt.hash(password, 12)
+            // console.log(verify, "Alhamdulilahi")
+
+            if (!email_verified) return res.status(400).json({ msg: "Email verification failed." })
+
+            const user = await Users.findOne({ email })
+            if (user) {
+                const isMatch = await bcrypt.compare(password, user.password)
+                if (!isMatch) return res.status(400).json({ msg: "Password is not match" })
+
+                const refresh_token = createRefreshToken({ id: user._id })
+                console.log(refresh_token, "Alhaja Java")
+                res.cookie('refreshtoken', refresh_token, {
+                    httpOnly: true,
+                    path: '/user/refresh_token',
+                    maxAge: 7 * 24 * 60 * 60 * 1000
+                    // 7days
+                })
+                res.json({ msg: "Login Success" })
+
+            } else {
+                const newUser = new Users({
+                    name, email, password: passwordHash, avatar: picture
+                })
+                await newUser.save()
+                const refresh_token = createRefreshToken({ id: newUser._id })
+                console.log(refresh_token, "Alhaja Java")
+                res.cookie('refreshtoken', refresh_token, {
+                    httpOnly: true,
+                    path: '/user/refresh_token',
+                    maxAge: 7 * 24 * 60 * 60 * 1000
+                    // 7days
+                })
+                res.json({ msg: "Login Success" })
+            }
+
+        } catch (err) {
+            console.log(err, "Life is good")
+            return res.status(500).json({ msg: err.message })
+        }
+    }
+
+}
 
 function validateEmail(email) {
     const re = /^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
